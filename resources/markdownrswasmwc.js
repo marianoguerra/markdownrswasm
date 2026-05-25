@@ -99,10 +99,23 @@ export class MdView extends HTMLElement {
       this._output.innerHTML = "";
       return;
     }
-    const toHtml = getToHtml();
-    const html = await toHtml(md);
-    if (token !== this._renderToken) return;
-    this._output.innerHTML = html;
+    try {
+      const toHtml = getToHtml();
+      const html = await toHtml(md);
+      if (token !== this._renderToken) return;
+      this._output.innerHTML = html;
+    } catch (err) {
+      if (token !== this._renderToken) return;
+      console.error("[md-view] render failed:", err);
+      const msg = (err && (err.message || String(err))) || "render failed";
+      // textContent, not innerHTML — the error string is untrusted.
+      this._output.textContent = `md-view: ${msg}`;
+      this.dispatchEvent(new CustomEvent("md-view-error", {
+        detail: { error: err, content: md },
+        bubbles: true,
+        composed: true,
+      }));
+    }
   }
 }
 
