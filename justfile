@@ -6,6 +6,9 @@ dist:
     cp resources/markdownrswasmwc.js pkg/
     cp resources/usageexample.js pkg/
     cp resources/index.html pkg/
+    cp resources/streamingperf.js pkg/
+    cp resources/streamingperf.html pkg/
+    cp README.md pkg/
 
 smoke-test: dist
     bun run tests/smoketest.js

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>markdownrswasm — streaming performance</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --border: #ccc;
+        --muted: #666;
+        --accent: #2b7cff;
+        --bad: #e0533d;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      header {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border);
+      }
+      header h1 { margin: 0 0 0.5rem; font-size: 1.05rem; }
+      header p { margin: 0 0 0.5rem; color: var(--muted); font-size: 0.85rem; }
+      .controls {
+        display: flex;
+        gap: 0.75rem;
+        align-items: end;
+        flex-wrap: wrap;
+      }
+      .field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; }
+      .field label { color: var(--muted); }
+      input, select, button {
+        font: inherit;
+        padding: 0.3rem 0.5rem;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: inherit;
+        border-radius: 4px;
+      }
+      input[type="number"] { width: 6.5rem; }
+      button { cursor: pointer; }
+      button.primary { border-color: var(--accent); color: var(--accent); }
+      main {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto 1fr;
+        min-height: 0;
+      }
+      .stats {
+        grid-column: 1 / -1;
+        padding: 0.4rem 1rem;
+        border-bottom: 1px solid var(--border);
+        font-variant-numeric: tabular-nums;
+        font-size: 0.85rem;
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+      }
+      .stats b { font-weight: 600; }
+      .chartwrap {
+        grid-column: 1 / -1;
+        border-bottom: 1px solid var(--border);
+        padding: 0.4rem 1rem;
+      }
+      #chart { width: 100%; height: 120px; display: block; }
+      .chartwrap .legend { font-size: 0.75rem; color: var(--muted); }
+      .preview {
+        padding: 0.75rem;
+        overflow: auto;
+        min-width: 0;
+      }
+      .preview.divider { border-right: 1px solid var(--border); }
+      .preview :first-child, md-view > :first-child { margin-top: 0; }
+      pre { background: rgba(127, 127, 127, 0.15); padding: 0.5rem; overflow-x: auto; }
+      code { font-family: ui-monospace, monospace; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Streaming performance — token-by-token rendering</h1>
+      <p>
+        Streams the README, concatenated N times, one chunk at a time into the renderer
+        — simulating LLM output. Each update is timed. Open the browser Performance panel
+        and record while streaming: each render shows up under User Timing as
+        <code>render</code>. Compare the <b>incremental &lt;md-view&gt;</b> against the
+        <b>naive</b> full re-parse to see the difference as the document grows.
+      </p>
+      <div class="controls">
+        <div class="field">
+          <label for="repeat">README × N</label>
+          <input type="number" id="repeat" value="20" min="1" max="500" />
+        </div>
+        <div class="field">
+          <label for="chunk">chars / update</label>
+          <input type="number" id="chunk" value="1" min="1" max="2000" />
+        </div>
+        <div class="field">
+          <label for="renderer">renderer</label>
+          <select id="renderer">
+            <option value="incremental">incremental &lt;md-view&gt;</option>
+            <option value="naive">naive (full re-parse + innerHTML)</option>
+          </select>
+        </div>
+        <button type="button" id="start" class="primary">Start</button>
+        <button type="button" id="stop">Stop</button>
+      </div>
+    </header>
+    <main>
+      <div class="stats" id="stats">Load a run to begin.</div>
+      <div class="chartwrap">
+        <canvas id="chart"></canvas>
+        <div class="legend">
+          per-update render time (ms) over stream progress — flat is good, rising means
+          cost grows with document length
+        </div>
+      </div>
+      <md-view class="preview divider" id="view-incremental"></md-view>
+      <div class="preview" id="view-naive" hidden></div>
+    </main>
+    <script type="module" src="./streamingperf.js"></script>
+  </body>
+</html>
