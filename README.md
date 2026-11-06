@@ -9,7 +9,8 @@ are escaped rather than executed.
 Ships three things:
 
 - **WASM core** (`markdownrswasm.js` / `markdownrswasm_bg.wasm`) — the raw
-  `mdToHtml(md) -> html` binding.
+  bindings: `mdToHtml(md) -> html`, plus `mdToAst(md)` and
+  `mdToTopLevel(md)`, which return the parsed document as JSON.
 - **Function wrapper** (`markdown.js`) — lazy-loads the WASM and exposes
   an `async` `toHtml(md)`.
 - **Web component** (`markdownrswasmwc.js`) — a `<md-view>` element that
@@ -21,7 +22,8 @@ Ships three things:
 just dist         # runs `wasm-pack build --target web` and copies
                   # markdown.js / markdownrswasmwc.js / usageexample.js /
                   # index.html into pkg/
-just smoke-test   # runs tests/smoketest.js against the built pkg
+just smoke-test   # runs tests/smoketest.js and tests/asttest.js
+                  # against the built pkg
 ```
 
 Serve `pkg/` over HTTP (ES modules + WASM won't load from `file://`):
@@ -32,7 +34,8 @@ python3 -m http.server 8000
 ```
 
 `pkg/index.html` is an interactive demo with a function-API tab and a
-web-component tab.
+web-component tab. `pkg/astplayground.html` shows the `mdToAst` /
+`mdToTopLevel` output for whatever you type.
 
 ## Usage
 
@@ -98,6 +101,95 @@ import { MdView, register } from "./markdownrswasmwc.js";
 MdView.basePath = "/vendor/markdownrswasm/";
 register();
 ```
+
+### 4. Parsing to an AST
+
+Two more bindings return the parsed document instead of HTML. Both
+return a JSON **string** (call `JSON.parse` on it), or `undefined` if
+parsing fails. They use the same parse options as `mdToHtml`: GFM is
+enabled, and raw HTML, math and MDX are disabled.
+
+#### `mdToAst(md)` — full mdast tree
+
+Returns the whole syntax tree in
+[mdast](https://github.com/syntax-tree/mdast) shape, as serialized by
+the `markdown` crate. Every node has a `type`, most have `children`,
+and every node carries a `position`:
+
+```js
+import init, { mdToAst } from "./markdownrswasm.js";
+
+await init();
+const ast = JSON.parse(mdToAst("# Hi\n\nsome *text*"));
+ast.type;                                  // "root"
+ast.children.map((n) => n.type);           // ["heading", "paragraph"]
+ast.children[0].depth;                     // 1
+ast.children[0].position.start;            // { line: 1, column: 1, offset: 0 }
+```
+
+`position.*.offset` is a **UTF-8 byte offset** into the source, not a
+JavaScript string index. The two differ once the text contains
+non-ASCII characters.
+
+#### `mdToTopLevel(md)` — section outline
+
+Groups the document's top-level blocks into a tree of sections built
+from its headings. Body blocks are **not** parsed further; each block
+is kept as its original markdown source. This is useful for outlines,
+splitting a document by section, or re-rendering one block at a time.
+
+```js
+import init, { mdToTopLevel } from "./markdownrswasm.js";
+
+await init();
+const top = JSON.parse(mdToTopLevel(`intro
+
+# A
+
+\`\`\`js
+x
+\`\`\`
+
+## B
+
+- item
+
+# C`));
+```
+
+```json
+{
+  "preamble": [{ "type": "paragraph", "markdown": "intro" }],
+  "sections": [
+    {
+      "type": "section",
+      "depth": 1,
+      "title": "A",
+      "blocks": [{ "type": "code", "markdown": "```js\nx\n```" }],
+      "children": [
+        {
+          "type": "section",
+          "depth": 2,
+          "title": "B",
+          "blocks": [{ "type": "list", "markdown": "- item\n" }],
+          "children": []
+        }
+      ]
+    },
+    { "type": "section", "depth": 1, "title": "C", "blocks": [], "children": [] }
+  ]
+}
+```
+
+- `preamble` holds the blocks that come before the first heading.
+- A heading starts a section. The section collects the blocks that
+  follow it until the next heading at the **same or a shallower** depth.
+  Deeper headings become nested `children`.
+- `title` is the heading's raw inline source without the `#` markers,
+  so inline markdown is kept: `## My **Title**` gives `"My **Title**"`.
+  An empty heading has an empty title.
+- Each block's `type` is its mdast node type (`paragraph`, `list`,
+  `code`, `table`, `blockquote`, `thematicBreak`, …).
 
 ## Styling the web component
 
