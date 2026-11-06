@@ -68,10 +68,7 @@ pub fn md_to_html(md: &str) -> Option<String> {
             gfm_tagfilter: false,
         },
     };
-    match markdown::to_html_with_options(md, &options) {
-        Ok(s) => Some(s),
-        Err(_err) => None,
-    }
+    markdown::to_html_with_options(md, &options).ok()
 }
 
 /// Parse markdown and return the whole mdast tree serialized as JSON.
@@ -157,7 +154,7 @@ fn build_top_level(md: &str, root: &mdast::Node) -> TopLevel {
 }
 
 /// Attach a finished section to its parent (top of stack) or to the root list.
-fn attach(stack: &mut Vec<Section>, roots: &mut Vec<Section>, section: Section) {
+fn attach(stack: &mut [Section], roots: &mut Vec<Section>, section: Section) {
     match stack.last_mut() {
         Some(parent) => parent.children.push(section),
         None => roots.push(section),
@@ -167,8 +164,16 @@ fn attach(stack: &mut Vec<Section>, roots: &mut Vec<Section>, section: Section) 
 /// Title of a heading: the raw source spanning its inline children (drops the
 /// leading `#` markers, keeps inline markdown). Empty for an empty heading.
 fn heading_title(md: &str, h: &mdast::Heading) -> String {
-    let start = h.children.first().and_then(|n| n.position()).map(|p| p.start.offset);
-    let end = h.children.last().and_then(|n| n.position()).map(|p| p.end.offset);
+    let start = h
+        .children
+        .first()
+        .and_then(|n| n.position())
+        .map(|p| p.start.offset);
+    let end = h
+        .children
+        .last()
+        .and_then(|n| n.position())
+        .map(|p| p.end.offset);
     match (start, end) {
         (Some(s), Some(e)) => md.get(s..e).unwrap_or("").to_string(),
         _ => String::new(),
